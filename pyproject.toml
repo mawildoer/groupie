@@ -11,7 +11,7 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/github_oidc"]
+packages = ["src/groupie"]
 
 [tool.hatch.version]
 source = "vcs"
@@ -20,4 +20,5 @@ source = "vcs"
 dev = [
     "pytest>=8.3.5",
     "ruff>=0.11.2",
+    "ty>=0.0.1a15",
 ]
