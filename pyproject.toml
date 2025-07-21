@@ -22,7 +22,10 @@ source = "vcs"
 [dependency-groups]
 dev = [
     "pre-commit>=4.2.0",
-    "pytest>=8.3.5",
-    "ruff>=0.11.2",
-    "ty>=0.0.1a15",
+    "pytest>=8.4.1",
+    # See: https://github.com/astral-sh/uv/issues/7260
+    # This dependency needs to be installed here so `uv` doesn't`
+    # make a new environment for it when using `--with`
+    "pytest-github-actions-annotate-failures>=0.3.0",
+    "ruff>=0.12.4",
 ]
