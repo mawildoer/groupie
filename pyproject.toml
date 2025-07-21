@@ -16,8 +16,12 @@ packages = ["src/groupie"]
 [tool.hatch.version]
 source = "vcs"
 
+[tool.ruff]
+# See: https://github.com/astral-sh/ruff/issues/14813#issuecomment-2523043841
+
 [dependency-groups]
 dev = [
+    "pre-commit>=4.2.0",
     "pytest>=8.3.5",
     "ruff>=0.11.2",
     "ty>=0.0.1a15",

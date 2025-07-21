@@ -15,7 +15,7 @@ class Groupie[T: Exception](contextlib.suppress, ABC):
 
     The `handle_exception` method is abstract and must be implemented by subclasses.
 
-    The 
+    The
     """
 
     _exception_types_to_handle: tuple[Type[T], ...]
@@ -190,7 +190,7 @@ class accumulate[T: Exception]:
             return self.collector.collected[0]
 
         # Use a dict because it's practically an ordered set
-        deduped = {ex: None for ex in self.collector.collected}  
+        deduped = {ex: None for ex in self.collector.collected}
         return ExceptionGroup(self.group_message, list(deduped.keys()))
 
     def raise_all(self):
@@ -241,7 +241,7 @@ class suppress_after_count[T: Exception](Groupie):
         self,
         limit: int,
         *exception_types: Type[T],
-        default = False,
+        default=False,
         suppression_warning: str | None = None,
         logger: logging.Logger = logger,
     ):
