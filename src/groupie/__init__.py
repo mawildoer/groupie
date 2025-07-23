@@ -161,6 +161,34 @@ class Collector[T: Exception](Groupie[T]):
     def __iter__(self) -> Iterator[T]:
         return iter(self.collected)
 
+    def append(self, exc: T):
+        self.collected.append(exc)
+
+    def extend(self, other: "Collector[T]"):
+        self.collected.extend(other.collected)
+
+    def make_exception_group[G: BaseExceptionGroup[T]](
+        self,
+        group_message: str,
+        group_class: type[G] = ExceptionGroup,
+    ) -> G | T | None:
+        """
+        Return an ExceptionGroup of the collected exceptions,
+        or None if there are no exceptions.
+
+        Exceptions within the group are considered an ordered set,
+        and so are deduplicated.
+        """
+        if not self.collected:
+            return None
+
+        if len(self.collected) == 1:
+            return self.collected[0]
+
+        # Use a dict because it's practically an ordered set
+        deduped = {ex: None for ex in self.collected}
+        return group_class(group_message, list(deduped.keys()))
+
 
 class accumulate[T: Exception]:
     """
@@ -175,29 +203,11 @@ class accumulate[T: Exception]:
         self.collector = Collector(*exception_types)
         self.group_message = group_message or ""
 
-    def get_exception_group(self) -> BaseExceptionGroup[T] | None:
-        """
-        Return an ExceptionGroup of the collected exceptions,
-        or None if there are no exceptions.
-
-        Exceptions within the group are considered an ordered set,
-        and so are deduplicated.
-        """
-        if not self.collector.collected:
-            return None
-
-        if len(self.collector.collected) == 1:
-            return self.collector.collected[0]
-
-        # Use a dict because it's practically an ordered set
-        deduped = {ex: None for ex in self.collector.collected}
-        return ExceptionGroup(self.group_message, list(deduped.keys()))
-
     def raise_all(self):
         """
         Raise the collected errors as an exception group.
         """
-        if ex := self.get_exception_group():
+        if ex := self.collector.make_exception_group(self.group_message):
             raise ex
 
     def __enter__(self) -> Self:
