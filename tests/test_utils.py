@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+import logging
 
 import pytest
 
@@ -39,90 +39,97 @@ def test_iter_through_errors():
         raise AssertionError("Expected an ExceptionGroup to be raised")
 
 
-def test_downgrade_context():
-    logger = MagicMock()
-    with downgrade(ValueError, logger=logger):
-        raise ValueError()
+def test_downgrade_context(caplog):
+    with caplog.at_level(logging.WARNING, logger="groupie"):
+        with downgrade(ValueError):
+            raise ValueError()
 
-    with pytest.raises(TypeError):
-        with downgrade(ValueError, logger=logger):
-            raise TypeError()
+        with pytest.raises(TypeError):
+            with downgrade(ValueError):
+                raise TypeError()
 
-    logger.log.assert_called_once()
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == "WARNING"
 
 
-def test_downgrade_context_custom_exception():
-    logger = MagicMock()
-
+def test_downgrade_context_custom_exception(caplog):
     class CustomException(Exception):
         pass
 
-    with downgrade(CustomException, logger=logger):
-        raise CustomException()
+    with caplog.at_level(logging.WARNING, logger="groupie"):
+        with downgrade(CustomException):
+            raise CustomException()
 
-    with pytest.raises(Exception):
-        with downgrade(CustomException, logger=logger):
-            raise Exception()
+        with pytest.raises(Exception):
+            with downgrade(CustomException):
+                raise Exception()
 
-    logger.log.assert_called_once()
-
-
-def test_downgrade_context_multiple_exceptions():
-    logger = MagicMock()
-    with downgrade(ValueError, TypeError, logger=logger):
-        raise ValueError()
-
-    logger.log.assert_called_once()
-
-    with pytest.raises(Exception):
-        with downgrade(ValueError, TypeError, logger=logger):
-            raise Exception()
-
-    logger.log.assert_called_once()
-
-    with downgrade(ValueError, TypeError, logger=logger):
-        raise TypeError()
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == "WARNING"
 
 
-def test_downgrade_decorator():
-    logger = MagicMock()
-
-    @downgrade(ValueError, logger=logger)
-    def foo():
-        raise ValueError()
-
-    a = foo()
-    assert a is None
-    logger.log.assert_called_once()
-
-
-def test_downgrade_decorator_with_default():
-    logger = MagicMock()
-
-    @downgrade(ValueError, default=2, logger=logger)
-    def foo():
-        raise ValueError()
-
-    a = foo()
-    assert a == 2
-    logger.log.assert_called_once()
-
-
-def test_suppress_after_count():
-    logger = MagicMock()
-    suppressor = suppress_after_count(
-        3, ValueError, suppression_warning="test warning", logger=logger
-    )
-    for _ in range(3):
-        with pytest.raises(ValueError), suppressor:
+def test_downgrade_context_multiple_exceptions(caplog):
+    with caplog.at_level(logging.WARNING, logger="groupie"):
+        with downgrade(ValueError, TypeError):
             raise ValueError()
 
-    logger.warning.assert_not_called()
+        assert len(caplog.records) == 1
 
-    with suppressor:
-        raise ValueError()
+        with pytest.raises(Exception):
+            with downgrade(ValueError, TypeError):
+                raise Exception()
 
-    logger.warning.assert_called_once()
+        assert len(caplog.records) == 1
+
+        with downgrade(ValueError, TypeError):
+            raise TypeError()
+
+    assert len(caplog.records) == 2
+
+
+def test_downgrade_decorator(caplog):
+    with caplog.at_level(logging.WARNING, logger="groupie"):
+
+        @downgrade(ValueError)
+        def foo():
+            raise ValueError()
+
+        a = foo()
+        assert a is None
+
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == "WARNING"
+
+
+def test_downgrade_decorator_with_default(caplog):
+    with caplog.at_level(logging.WARNING, logger="groupie"):
+
+        @downgrade(ValueError, default=2)
+        def foo():
+            raise ValueError()
+
+        a = foo()
+        assert a == 2
+
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == "WARNING"
+
+
+def test_suppress_after_count(caplog):
+    with caplog.at_level(logging.WARNING, logger="groupie"):
+        suppressor = suppress_after_count(3, ValueError, suppression_warning="test warning")
+        for _ in range(3):
+            with pytest.raises(ValueError), suppressor:
+                raise ValueError()
+
+        assert len(caplog.records) == 0
+
+        with suppressor:
+            raise ValueError()
+
+    assert len(caplog.records) == 1
+    assert "test warning" in caplog.text
+    assert caplog.records[0].levelname == "WARNING"
 
 
 def test_iter_leaf_exceptions():
