@@ -1,10 +1,10 @@
 import contextlib
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Generator
 from functools import wraps
 from types import TracebackType
 from typing import Callable, Iterable, Iterator, Self, Type, cast
-
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +137,17 @@ def iter_leaf_exceptions[T: Exception](ex: T | BaseExceptionGroup[T]) -> Iterabl
         yield cast(T, ex)
 
 
+type Deduper[T] = Callable[[Iterable[T]], list[T]]
+
+
+def dedup_hash[T](exs: Iterable[T]) -> list[T]:
+    return list({ex: None for ex in exs}.keys())
+
+
+def dedup_repr[T](exs: Iterable[T]) -> list[T]:
+    return list({repr(ex): ex for ex in exs}.values())
+
+
 class Collector[T: Exception](Groupie[T]):
     """
     Collect a group of exceptions and only raise  at the end of execution.
@@ -167,10 +178,11 @@ class Collector[T: Exception](Groupie[T]):
     def extend(self, other: "Collector[T]"):
         self.collected.extend(other.collected)
 
-    def make_exception_group[G: BaseExceptionGroup[T]](
+    def make_exception_group[G: BaseExceptionGroup](
         self,
         group_message: str,
         group_class: type[G] = ExceptionGroup,
+        dedup: Deduper | None = dedup_hash,
     ) -> G | T | None:
         """
         Return an ExceptionGroup of the collected exceptions,
@@ -182,12 +194,15 @@ class Collector[T: Exception](Groupie[T]):
         if not self.collected:
             return None
 
-        if len(self.collected) == 1:
+        if dedup is None:
+            deduped = self.collected
+        else:
+            deduped = dedup(self.collected)
+
+        if len(deduped) == 1:
             return self.collected[0]
 
-        # Use a dict because it's practically an ordered set
-        deduped = {ex: None for ex in self.collected}
-        return group_class(group_message, list(deduped.keys()))
+        return group_class(group_message, deduped)
 
 
 class accumulate[T: Exception]:
@@ -273,11 +288,11 @@ class suppress_after_count[T: Exception](Groupie):
         return True
 
 
-def iter_through_errors[T](
+def iter_through_errors[T, E: Exception](
     gen: Iterable[T],
-    *accumulate_types: Type,
+    *accumulate_types: type[E],
     group_message: str | None = None,
-) -> Iterable[tuple[Callable[[], Collector[T]], T]]:
+) -> Generator[tuple[Collector[E], T]]:
     """
     Wraps an iterable and yields:
     - a context manager that collects any ato errors
@@ -290,3 +305,29 @@ def iter_through_errors[T](
             # NOTE: we don't create a single context manager for the whole generator
             # because generator context managers are a bit special
             yield accumulator.collector, item
+
+
+def retry[T: Exception](
+    attempts: int,
+    *exception_types: type[T],
+    group_message: str,
+    group_class: type[BaseExceptionGroup] = ExceptionGroup,
+    dedup: Deduper | None = dedup_hash,
+) -> Generator[Collector[T]]:
+    """
+    Retry something up to `attempts` number of times,
+    raising an Exception/ExceptionGroup if none were successful.
+
+    If non exception is raised on an iteration of the loop, we break
+    """
+
+    collector = Collector(*exception_types)
+    for _ in range(attempts):
+        prev_exs = collector.collected.copy()
+        yield collector
+        if prev_exs == collector.collected:
+            return
+
+    else:
+        if ex := collector.make_exception_group(group_message, group_class, dedup):
+            raise ex
