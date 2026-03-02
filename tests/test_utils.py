@@ -4,9 +4,11 @@ import pytest
 
 from groupie import (
     accumulate,
+    dedup_repr,
     downgrade,
     iter_leaf_exceptions,
     iter_through_errors,
+    retry,
     suppress_after_count,
 )
 
@@ -117,7 +119,9 @@ def test_downgrade_decorator_with_default(caplog):
 
 def test_suppress_after_count(caplog):
     with caplog.at_level(logging.WARNING, logger="groupie"):
-        suppressor = suppress_after_count(3, ValueError, suppression_warning="test warning")
+        suppressor = suppress_after_count(
+            3, ValueError, suppression_warning="test warning"
+        )
         for _ in range(3):
             with pytest.raises(ValueError), suppressor:
                 raise ValueError()
@@ -145,3 +149,48 @@ def test_iter_leaf_exceptions():
         "test 2.1",
         "test 2.2",
     ]
+
+
+def test_retry_all_same_fail():
+    with pytest.raises(ValueError):
+        for c in retry(3, ValueError, group_message="You failed", dedup=dedup_repr):
+            with c:
+                raise ValueError
+
+
+def test_retry_all_varying_failures():
+    with pytest.raises(ExceptionGroup):
+        for i, c in enumerate(
+            retry(
+                3, ValueError, TypeError, group_message="You failed", dedup=dedup_repr
+            )
+        ):
+            with c:
+                if i == 0:
+                    raise ValueError
+                if i > 0:
+                    # NOTE: this is intentionally an instance, and the above
+                    # a bare exception type to exercise both paths
+                    raise TypeError()
+
+
+def test_retry_fail_pass():
+    for i, c in enumerate(
+        retry(3, ValueError, group_message="You failed", dedup=dedup_repr)
+    ):
+        with c:
+            if i == 0:
+                raise ValueError
+
+    assert i == 1
+
+
+def test_retry_pass_fail():
+    for i, c in enumerate(
+        retry(3, ValueError, group_message="You failed", dedup=dedup_repr)
+    ):
+        with c:
+            if i == 1:
+                raise ValueError
+
+    assert i == 0
