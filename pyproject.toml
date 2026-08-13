@@ -2,7 +2,7 @@
 name = "groupie"
 description = "Exception group utilities for exceptional code"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = []
 dynamic = ["version"]
 
